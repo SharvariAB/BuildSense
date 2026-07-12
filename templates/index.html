@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BuildSense - Multi-Agent AI Construction Engine</title>
+    <!-- Google Fonts: Outfit (headings) and Inter (body) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome for premium vector icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Custom Style -->
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <!-- App Container -->
+    <div class="app-container">
+        <!-- Top Navigation / Header -->
+        <header class="app-header">
+            <div class="header-logo">
+                <div class="logo-icon"><i class="fa-solid fa-compass-drafting"></i></div>
+                <div class="logo-text">
+                    <h1>BuildSense</h1>
+                    <span>Multi-Agent AI Decision Engine</span>
+                </div>
+            </div>
+            
+            <div class="header-actions">
+                <div class="engine-mode-badge" id="engineModeBadge">
+                    <span class="status-dot pulsing"></span>
+                    <span class="mode-text">Simulation Mode</span>
+                </div>
+                <button class="btn btn-secondary" id="openSettingsBtn" title="Configure API Credentials">
+                    <i class="fa-solid fa-key"></i> Gemini API Key
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Dashboard Grid -->
+        <main class="app-main">
+            <!-- Left Panel: Blueprint Canvas & Orchestrator Map -->
+            <section class="left-panel">
+                <!-- Card 1: Drawing Workspace -->
+                <div class="glass-card blueprint-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fa-solid fa-map"></i>
+                            <h2>Floor Plan Workspace</h2>
+                        </div>
+                        <div class="canvas-controls" id="canvasControls" style="display: none;">
+                            <span class="control-badge badge-blue" id="lblTotalArea"><i class="fa-solid fa-ruler-combined"></i> 2,400 sq ft</span>
+                            <span class="control-badge badge-orange" id="lblCorridors"><i class="fa-solid fa-route"></i> 1 Corridor</span>
+                            <span class="control-badge badge-green" id="lblExits"><i class="fa-solid fa-door-open"></i> 2 Exits</span>
+                        </div>
+                    </div>
+                    
+                    <div class="card-body blueprint-body">
+                        <!-- Dropzone for uploads -->
+                        <div class="upload-dropzone" id="uploadDropzone">
+                            <div class="dropzone-inner">
+                                <i class="fa-solid fa-cloud-arrow-up drop-icon"></i>
+                                <h3>Drag & Drop Floor Plan</h3>
+                                <p>Supports PNG, JPG, JPEG (Scanned plans/drawings)</p>
+                                <div class="dropzone-divider"><span>OR</span></div>
+                                <label for="fileInput" class="btn btn-primary btn-upload">
+                                    <i class="fa-solid fa-folder-open"></i> Browse Files
+                                </label>
+                                <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                                <button class="btn btn-link btn-preset" id="loadDemoBtn">
+                                    <i class="fa-solid fa-image"></i> Load Demo Renovations Blueprint
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Canvas Workspace -->
+                        <div class="canvas-container" id="canvasContainer" style="display: none;">
+                            <div class="canvas-wrapper">
+                                <canvas id="blueprintCanvas"></canvas>
+                                <!-- Interactive Tooltip Overlay -->
+                                <div class="canvas-tooltip" id="canvasTooltip"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 2: Orchestration Visualizer -->
+                <div class="glass-card orchestrator-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fa-solid fa-network-wired"></i>
+                            <h2>Multi-Agent Orchestration Map</h2>
+                        </div>
+                        <span class="card-subtitle" id="orchestratorStatus">Idle</span>
+                    </div>
+                    <div class="card-body orchestrator-body">
+                        <div class="orchestrator-graph">
+                            <!-- SVGs for connections and pulse indicators -->
+                            <svg class="graph-connections" id="graphConnections">
+                                <path id="path-blueprint" class="conn-path" d="" />
+                                <path id="path-cost" class="conn-path" d="" />
+                                <path id="path-compliance" class="conn-path" d="" />
+                                <path id="path-scheduling" class="conn-path" d="" />
+                                <path id="path-workforce" class="conn-path" d="" />
+                            </svg>
+                            
+                            <!-- Central Coordinator Node -->
+                            <div class="agent-node node-coordinator active" id="node-coordinator" data-agent="Coordinator">
+                                <div class="node-glow"></div>
+                                <div class="node-icon"><i class="fa-solid fa-crown"></i></div>
+                                <span class="node-name">Coordinator Agent</span>
+                                <span class="node-status">Ready</span>
+                            </div>
+
+                            <!-- Specialist Nodes -->
+                            <div class="agent-node node-specialist" id="node-blueprint" data-agent="Blueprint Analysis">
+                                <div class="node-glow"></div>
+                                <div class="node-icon"><i class="fa-solid fa-eye"></i></div>
+                                <span class="node-name">Blueprint Vision</span>
+                                <span class="node-status">Idle</span>
+                            </div>
+
+                            <div class="agent-node node-specialist" id="node-cost" data-agent="Cost Estimation">
+                                <div class="node-glow"></div>
+                                <div class="node-icon"><i class="fa-solid fa-calculator"></i></div>
+                                <span class="node-name">Cost Estimator</span>
+                                <span class="node-status">Idle</span>
+                            </div>
+
+                            <div class="agent-node node-specialist" id="node-compliance" data-agent="Code Compliance">
+                                <div class="node-glow"></div>
+                                <div class="node-icon"><i class="fa-solid fa-scale-balanced"></i></div>
+                                <span class="node-name">Code Compliance</span>
+                                <span class="node-status">Idle</span>
+                            </div>
+
+                            <div class="agent-node node-specialist" id="node-scheduling" data-agent="Scheduling">
+                                <div class="node-glow"></div>
+                                <div class="node-icon"><i class="fa-solid fa-calendar-days"></i></div>
+                                <span class="node-name">Scheduling Agent</span>
+                                <span class="node-status">Idle</span>
+                            </div>
+
+                            <div class="agent-node node-specialist" id="node-workforce" data-agent="Workforce">
+                                <div class="node-glow"></div>
+                                <div class="node-icon"><i class="fa-solid fa-people-group"></i></div>
+                                <span class="node-name">Workforce Agent</span>
+                                <span class="node-status">Idle</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Panel: Chat Console & Decision Support Output -->
+            <section class="right-panel">
+                <div class="glass-card chat-card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fa-solid fa-comment-dots"></i>
+                            <h2>Decision Support & Chat</h2>
+                        </div>
+                        <button class="btn btn-link btn-clear" id="clearChatBtn" title="Clear Chat History">
+                            <i class="fa-solid fa-rotate-left"></i> Reset
+                        </button>
+                    </div>
+                    
+                    <!-- Chat Window -->
+                    <div class="card-body chat-body" id="chatHistory">
+                        <!-- Default Welcome Message -->
+                        <div class="chat-message system-message">
+                            <div class="msg-icon"><i class="fa-solid fa-robot"></i></div>
+                            <div class="msg-content">
+                                <h3>Welcome to BuildSense</h3>
+                                <p>Upload an architectural floor plan drawing on the left, then ask me questions about budget matching, fire code compliance, labor timelines, or resource scheduling.</p>
+                                
+                                <div class="quick-presets">
+                                    <span class="preset-title">Try this query preset:</span>
+                                    <button class="btn btn-preset-chip" id="presetQueryBtn">
+                                        "Can we finish Phase 2 within a ₹15 lakh budget while staying compliant with fire safety norms?"
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Input Area -->
+                    <div class="chat-input-area">
+                        <div class="input-row">
+                            <div class="input-wrapper">
+                                <i class="fa-solid fa-message input-icon"></i>
+                                <input type="text" id="chatInput" placeholder="Ask about cost estimation, NBC safety norms, or labor..." autocomplete="off">
+                            </div>
+                            <button class="btn btn-primary btn-send" id="sendBtn">
+                                <i class="fa-solid fa-paper-plane"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Credentials Settings Modal -->
+        <div class="modal-overlay" id="settingsModal">
+            <div class="modal-container glass-card">
+                <div class="modal-header">
+                    <h3><i class="fa-solid fa-gears"></i> Engine Configuration</h3>
+                    <button class="modal-close-btn" id="closeSettingsBtn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p class="modal-desc">
+                        Provide a Gemini API key to enable live AI analysis. BuildSense will process floor plans using Gemini Vision models (`gemini-1.5-flash`) via LangChain.
+                    </p>
+                    <div class="form-group">
+                        <label for="apiKeyInput">Gemini API Key</label>
+                        <div class="input-group">
+                            <input type="password" id="apiKeyInput" placeholder="AIzaSy...">
+                            <button class="btn btn-icon-eye" id="toggleKeyVisibility">
+                                <i class="fa-solid fa-eye"></i>
+                            </button>
+                        </div>
+                        <small class="form-help text-muted">
+                            Leaving this empty will run the system in <strong>Simulation Mode</strong> using high-fidelity mock data.
+                        </small>
+                    </div>
+                    <div class="modal-status-box" id="modalStatusBox">
+                        <span class="status-dot"></span> <span class="status-text">Checking credentials...</span>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="cancelSettingsBtn">Close</button>
+                    <button class="btn btn-primary" id="saveSettingsBtn">Save Configuration</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Client Logic -->
+    <script src="/static/js/main.js"></script>
+</body>
+</html>
