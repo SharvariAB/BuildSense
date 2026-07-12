@@ -1,3 +1,11 @@
+## Author
+
+Sharvari Balapurkar
+
+Infosys Springboard Virtual Internship
+
+Project: BuildSense - Multi-Agent AI Decision Support System
+
 # BuildSense 🏗️
 ### AI Agent Coordination & Decision Engine for Construction Projects
 
