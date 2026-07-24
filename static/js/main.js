@@ -7,7 +7,8 @@ document.addEventListener("DOMContentLoaded", () => {
         fileUrl: "",
         spatialData: null,
         isConfigured: false,
-        activePreset: false
+        activePreset: false,
+        lastPipelineResult: null
     };
 
     // DOM Elements
@@ -39,6 +40,13 @@ document.addEventListener("DOMContentLoaded", () => {
         sendBtn: document.getElementById("sendBtn"),
         clearChatBtn: document.getElementById("clearChatBtn"),
         presetQueryBtn: document.getElementById("presetQueryBtn"),
+        exportReportBtn: document.getElementById("exportReportBtn"),
+        
+        // Weather
+        weatherStrip: document.getElementById("weatherStrip"),
+        weatherIcon: document.getElementById("weatherIcon"),
+        weatherText: document.getElementById("weatherText"),
+        weatherRisk: document.getElementById("weatherRisk"),
         
         // Settings Modal
         engineModeBadge: document.getElementById("engineModeBadge"),
@@ -126,6 +134,35 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
     checkEngineStatus();
+
+    // ----------------------------------------------------
+    // Weather Strip Logic
+    // ----------------------------------------------------
+    async function loadWeather() {
+        try {
+            const res = await fetch("/api/weather?city=Pune");
+            const data = await res.json();
+            
+            elements.weatherStrip.style.display = "flex";
+            elements.weatherText.textContent = `${data.city}: ${data.temp_c}°C, ${data.condition}`;
+            elements.weatherRisk.textContent = data.risk_level;
+            
+            elements.weatherRisk.className = "weather-risk";
+            if (data.risk_level === "LOW") {
+                elements.weatherRisk.classList.add("badge-low");
+                elements.weatherIcon.textContent = "☀️";
+            } else if (data.risk_level === "MEDIUM") {
+                elements.weatherRisk.classList.add("badge-medium");
+                elements.weatherIcon.textContent = "⛅";
+            } else {
+                elements.weatherRisk.classList.add("badge-high");
+                elements.weatherIcon.textContent = "🌧️";
+            }
+        } catch (e) {
+            console.error("Failed to load weather data:", e);
+        }
+    }
+    loadWeather();
 
     // Modal Events
     elements.openSettingsBtn.addEventListener("click", () => {
@@ -612,6 +649,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     return;
                 }
 
+                // Store for export
+                state.lastPipelineResult = data;
+                elements.exportReportBtn.style.display = "inline-flex";
+
                 // Append Coordinator Synthesis Markdown
                 // Convert simple Markdown text to HTML structure
                 const formattedRec = formatMarkdown(data.synthesized_recommendation);
@@ -623,6 +664,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 // Append Collapsible cards for each specialist output
                 appendSpecialistCards(data.specialist_outputs);
+                
+                // Append Tool Trace Panel
+                if (data.tool_execution_trace && data.tool_execution_trace.length > 0) {
+                    appendToolTracePanel(data.tool_execution_trace);
+                    updateToolBadges(data.tool_execution_trace);
+                }
 
             } catch (e) {
                 if (loadingBubble && loadingBubble.parentNode) {
@@ -887,7 +934,102 @@ document.addEventListener("DOMContentLoaded", () => {
         // Reset node visuals
         document.querySelectorAll(".agent-node").forEach(n => {
             if (n.id !== "node-coordinator") n.className = "agent-node node-specialist";
+            const badge = n.querySelector(".node-tool-badge");
+            if (badge) badge.style.display = "none";
         });
         document.querySelectorAll(".conn-path").forEach(p => p.className.baseVal = "conn-path");
+        elements.exportReportBtn.style.display = "none";
+    });
+
+    // ----------------------------------------------------
+    // Tool Trace Panel & Badges (Milestone 2)
+    // ----------------------------------------------------
+    function appendToolTracePanel(trace) {
+        if (!trace || trace.length === 0) return;
+        
+        let traceHtml = trace.map(call => {
+            const rowClass = call.status === "success" ? "success" : "error";
+            const time = call.timestamp ? call.timestamp.split("T")[1].substring(0, 8) : "";
+            const toolName = call.tool || call.tool_name || "unknown_tool";
+            const duration = call.duration_ms ? `${call.duration_ms}ms` : "";
+            
+            return `
+                <div class="tool-trace-row ${rowClass}">
+                    <span><span style="color:#5e697a">[${time}]</span> <span class="tool-trace-name">${toolName}</span></span>
+                    <span class="tool-trace-duration">${duration}</span>
+                </div>
+            `;
+        }).join("");
+        
+        createActivityCard(
+            "Cogs", 
+            "Tool Execution Trace", 
+            `<div class="tool-trace-panel">${traceHtml}</div>`
+        );
+    }
+
+    function updateToolBadges(trace) {
+        if (!trace || trace.length === 0) return;
+        
+        // Count tool calls heuristically based on tool name
+        const counts = {
+            "node-cost": 0,
+            "node-scheduling": 0,
+            "node-compliance": 0,
+            "node-coordinator": 0,
+            "node-blueprint": 0,
+            "node-workforce": 0
+        };
+        
+        trace.forEach(call => {
+            const toolName = call.tool || call.tool_name || "";
+            if (toolName.includes("material_price")) counts["node-cost"]++;
+            else if (toolName.includes("weather")) counts["node-scheduling"]++;
+            else if (toolName.includes("nbc_rule")) counts["node-compliance"]++;
+            else counts["node-coordinator"]++;
+        });
+        
+        for (const [nodeId, count] of Object.entries(counts)) {
+            const node = document.getElementById(nodeId);
+            if (node) {
+                const badge = node.querySelector(".node-tool-badge");
+                const countSpan = node.querySelector(".node-tool-badge .count");
+                if (badge && countSpan) {
+                    if (count > 0) {
+                        countSpan.textContent = count;
+                        badge.style.display = "block";
+                    } else {
+                        badge.style.display = "none";
+                    }
+                }
+            }
+        }
+    }
+
+    elements.exportReportBtn.addEventListener("click", async () => {
+        if (!state.lastPipelineResult) {
+            alert("No analysis result available to export.");
+            return;
+        }
+        
+        try {
+            const res = await fetch("/api/export", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    pipeline_result: state.lastPipelineResult,
+                    report_title: "BuildSense Milestone 2 Audit Report"
+                })
+            });
+            const data = await res.json();
+            
+            if (data.report_url) {
+                window.open(data.report_url, "_blank");
+            } else {
+                alert("Failed to export report: " + data.error);
+            }
+        } catch (e) {
+            alert("Failed to export report: " + e.message);
+        }
     });
 });

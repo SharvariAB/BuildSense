@@ -1,40 +1,81 @@
+"""
+BuildSense — Code Compliance Agent
+Milestone 2 Upgrade: Tool-Integrated Version
+
+Upgrades from Milestone 1:
+- Uses the ToolRegistry to call `lookup_nbc_rule` for each compliance check,
+  replacing hardcoded citation strings with dynamic, auditable lookups.
+- Records every tool call in a `tool_calls` audit list returned in the output.
+- Simulation mode now fetches NBC regulation text from the tool knowledge base.
+"""
+
 import json
 from agents.config import get_llm, is_live_mode
 
+
 def check_compliance(spatial_data, query=None):
     """
-    Checks spatial coordinates and dimensions against the National Building Code (NBC) of India.
+    Checks spatial coordinates and dimensions against NBC 2016.
+    
+    Milestone 2: Each compliance rule now fetches its regulation text via the
+    `lookup_nbc_rule` tool, enabling dynamic, auditable citation chains.
+
+    Args:
+        spatial_data: Output of `analyze_blueprint()`.
+        query:        Optional user context string.
+
+    Returns:
+        dict with compliance_checks, is_overall_compliant, summary_findings,
+        and `tool_calls` (list of tool invocation audit entries).
     """
+    from agents.tools import tool_registry
+
+    log_start = len(tool_registry.get_audit_log())
+
+    # ── Live Mode ──────────────────────────────────────────────────────────────
     if is_live_mode():
         llm = get_llm()
+        
+        # Fetch key rules via tool before sending to LLM to enrich the prompt
+        nbc_4_3 = tool_registry.invoke("lookup_nbc_rule", part="Part 4", clause="4.3")
+        nbc_4_2 = tool_registry.invoke("lookup_nbc_rule", part="Part 4", clause="4.2")
+        nbc_6_2 = tool_registry.invoke("lookup_nbc_rule", part="Part 3", clause="6.2")
+
+        nbc_texts = []
+        for res in [nbc_4_3, nbc_4_2, nbc_6_2]:
+            if res.get("status") == "success":
+                out = res.get("output", {})
+                nbc_texts.append(
+                    f"[{out.get('full_citation', '')}]: {out.get('regulation_text', '')[:300]}"
+                )
+
+        nbc_context = "\n".join(nbc_texts) if nbc_texts else "NBC 2016 Part 4 fire safety rules."
+
         prompt = f"""
-You are an expert Building Inspector and Code Compliance Consultant specializing in the National Building Code (NBC) of India.
-Analyze the following spatial layout data of a floor plan and evaluate it for building code violations.
+You are an expert Building Inspector and Code Compliance Consultant specializing in the National Building Code (NBC) of India 2016.
+Analyze the following spatial layout data and evaluate it for building code violations.
 
 Spatial Data:
 {json.dumps(spatial_data, indent=2)}
 
-Focus on checking the following standard NBC guidelines:
-1. Fire Escape Corridor Width (NBC 2016 Part 4, Clause 4.3): Minimum 1.2m for commercial/office spaces.
-2. Exit Count (NBC Part 4, Clause 4.2): At least 2 remote exits required for spaces exceeding 1,500 sq ft.
-3. Staircase / Egress Width: Minimum 1.2m for public/office occupancy.
-4. Setbacks: Minimum open setbacks around the building perimeter depending on plot height.
+Relevant NBC Regulations (fetched from NBC Knowledge Base):
+{nbc_context}
 
 Provide your response as a JSON object matching this schema:
 {{
   "compliance_checks": [
     {{
-      "rule": "Name of the rule (e.g. Corridor Egress Width)",
+      "rule": "Name of the rule",
       "status": "PASS or FAIL or WARNING",
-      "found_value": "What value was detected in the plan (e.g., 0.9m)",
-      "required_value": "What NBC requires (e.g., 1.2m)",
-      "nbc_citation": "Specific clause/section from NBC (e.g., NBC 2016 Part 4, Clause 4.3)",
-      "message": "Detailed explanation of the findings.",
+      "found_value": "Detected value",
+      "required_value": "NBC requirement",
+      "nbc_citation": "Specific clause from NBC",
+      "message": "Detailed explanation",
       "severity": "CRITICAL or MEDIUM or INFO"
     }}
   ],
   "is_overall_compliant": false,
-  "summary_findings": "A high-level summary of the critical issues found and their structural implications."
+  "summary_findings": "High-level summary."
 }}
 
 CRITICAL RULES:
@@ -47,45 +88,73 @@ CRITICAL RULES:
                 text = text[7:]
             if text.endswith("```"):
                 text = text[:-3]
-            return json.loads(text.strip())
+            result = json.loads(text.strip())
+            result["tool_calls"] = _extract_tool_calls(tool_registry, log_start)
+            return result
         except Exception as e:
             print(f"Error in Gemini Compliance: {str(e)}. Falling back to simulation.")
-            
-    # Simulation / Rule-Based Mode
+
+    # ── Simulation / Tool-Backed Mode ─────────────────────────────────────────
     checks = []
     is_overall_compliant = True
-    
-    # 1. Check Corridors
+
+    # 1. Corridor width — fetch regulation via NBC Lookup Tool
     corridors = spatial_data.get("corridors", [])
     for corr in corridors:
         width_m = corr.get("width_m", 1.2)
         name = corr.get("name", "Corridor")
-        if width_m < 1.2:
+
+        # Dynamic rule lookup
+        nbc_result = tool_registry.invoke("lookup_nbc_rule", part="Part 4", clause="4.3")
+        if nbc_result.get("status") == "success":
+            nbc_data = nbc_result.get("output", {})
+            min_width = nbc_data.get("minimum_required_value", 1.2)
+            citation = nbc_data.get("full_citation", "NBC 2016 Part 4, Clause 4.3")
+            severity = nbc_data.get("severity", "CRITICAL")
+        else:
+            min_width = 1.2
+            citation = "NBC 2016 Part 4 (Fire and Life Safety), Clause 4.3"
+            severity = "CRITICAL"
+
+        if width_m < min_width:
             is_overall_compliant = False
             checks.append({
-                "rule": f"Corridor Width - {name}",
+                "rule": f"Corridor Width — {name}",
                 "status": "FAIL",
                 "found_value": f"{width_m}m",
-                "required_value": "1.2m minimum",
-                "nbc_citation": "NBC 2016 Part 4 (Fire and Life Safety), Clause 4.3",
-                "message": f"The exit access corridor '{name}' is only {width_m}m wide. This fails the fire egress safety corridor requirement of 1.2m.",
-                "severity": "CRITICAL"
+                "required_value": f"{min_width}m minimum",
+                "nbc_citation": citation,
+                "message": (
+                    f"The exit access corridor '{name}' is only {width_m}m wide. "
+                    f"This fails the fire egress safety corridor requirement of {min_width}m. "
+                    f"Regulation: {nbc_result.get('output', {}).get('regulation_text', '')[:200]}"
+                ),
+                "severity": severity
             })
         else:
             checks.append({
-                "rule": f"Corridor Width - {name}",
+                "rule": f"Corridor Width — {name}",
                 "status": "PASS",
                 "found_value": f"{width_m}m",
-                "required_value": "1.2m minimum",
-                "nbc_citation": "NBC 2016 Part 4 (Fire and Life Safety), Clause 4.3",
-                "message": f"Corridor '{name}' width ({width_m}m) is compliant with NBC emergency egress width regulations.",
+                "required_value": f"{min_width}m minimum",
+                "nbc_citation": citation,
+                "message": f"Corridor '{name}' ({width_m}m) meets the NBC minimum egress width.",
                 "severity": "INFO"
             })
-            
-    # 2. Check Exits
+
+    # 2. Exit count — fetch regulation via NBC Lookup Tool
     exits = spatial_data.get("exits", [])
     total_area = spatial_data.get("total_area_sqft", 2400)
-    
+
+    exit_rule = tool_registry.invoke("lookup_nbc_rule", part="Part 4", clause="4.2")
+    if exit_rule.get("status") == "success":
+        exit_data = exit_rule.get("output", {})
+        exit_citation = exit_data.get("full_citation", "NBC 2016 Part 4, Clause 4.2")
+        exit_severity = exit_data.get("severity", "CRITICAL")
+    else:
+        exit_citation = "NBC 2016 Part 4, Clause 4.2.1"
+        exit_severity = "CRITICAL"
+
     if len(exits) < 2 and total_area > 1500:
         is_overall_compliant = False
         checks.append({
@@ -93,9 +162,12 @@ CRITICAL RULES:
             "status": "FAIL",
             "found_value": f"{len(exits)} exit(s)",
             "required_value": "Minimum 2 remote exits",
-            "nbc_citation": "NBC 2016 Part 4, Clause 4.2.1",
-            "message": f"Only {len(exits)} exits detected for an area of {total_area:,} sq ft. NBC requires at least two separate, remote exits to prevent crowding during evacuations.",
-            "severity": "CRITICAL"
+            "nbc_citation": exit_citation,
+            "message": (
+                f"Only {len(exits)} exits detected for {total_area:,} sq ft. "
+                "NBC requires at least two separate, remote exits to prevent crowding during evacuations."
+            ),
+            "severity": exit_severity
         })
     else:
         checks.append({
@@ -103,31 +175,51 @@ CRITICAL RULES:
             "status": "PASS",
             "found_value": f"{len(exits)} exits",
             "required_value": "Minimum 2 remote exits",
-            "nbc_citation": "NBC 2016 Part 4, Clause 4.2.1",
-            "message": "Satisfactory exit paths: Detected at least two separate egress routes.",
+            "nbc_citation": exit_citation,
+            "message": "Satisfactory exit paths: at least two separate egress routes detected.",
             "severity": "INFO"
         })
-        
-    # 3. Check Setback/Open Space (Assumed/Standard)
-    # We add a warning check indicating zoning regulations should be verified for small renovations
+
+    # 3. Setback advisory — fetch via NBC Lookup Tool
+    setback_rule = tool_registry.invoke("lookup_nbc_rule", part="Part 3", clause="6.2")
+    if setback_rule.get("status") == "success":
+        sb_data = setback_rule.get("output", {})
+        sb_citation = sb_data.get("full_citation", "NBC 2016 Part 3, Clause 6.2")
+        sb_text = sb_data.get("regulation_text", "")[:200]
+    else:
+        sb_citation = "NBC 2016 Part 3 (Development Control Rules), Clause 6.2"
+        sb_text = "Minimum setbacks typically 3.0m front/rear, 1.5m sides."
+
     checks.append({
         "rule": "Perimeter Setbacks",
         "status": "WARNING",
         "found_value": "Not specified in interior plan",
         "required_value": "Zoning / Municipal norms (typically 3.0m)",
-        "nbc_citation": "NBC 2016 Part 3 (Development Control Rules), Clause 6.2",
-        "message": "Boundary setback clearances are not specified in the interior floor plan. Ensure local municipal (e.g. BMC/DDA) setbacks are maintained around exterior walls.",
+        "nbc_citation": sb_citation,
+        "message": (
+            f"Boundary setback clearances are not specified in the interior floor plan. "
+            f"Ensure local municipal setbacks are maintained. Regulation: {sb_text}"
+        ),
         "severity": "MEDIUM"
     })
-    
+
     summary = (
-        "Non-compliant. The central escape corridor (Corridor A) has a width of 0.9m, which is a critical fire hazard violating the NBC Clause 4.3 minimum threshold of 1.2m. "
-        "Additionally, verify that building setbacks are aligned with local municipal bylaws."
-        if not is_overall_compliant else "Overall Compliant with NBC safety specifications."
+        "Non-compliant. Corridor A (0.9m) violates NBC minimum egress width of 1.2m (CRITICAL). "
+        "Verify building setbacks with local municipal authority."
+        if not is_overall_compliant else
+        "Overall Compliant with NBC safety specifications."
     )
-    
+
+    tool_calls = _extract_tool_calls(tool_registry, log_start)
+
     return {
         "compliance_checks": checks,
         "is_overall_compliant": is_overall_compliant,
-        "summary_findings": summary
+        "summary_findings": summary,
+        "tool_calls": tool_calls
     }
+
+
+def _extract_tool_calls(tool_registry, log_start: int) -> list:
+    """Extracts new tool audit entries added since log_start."""
+    return tool_registry.get_audit_log()[log_start:]

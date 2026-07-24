@@ -7,6 +7,9 @@ from werkzeug.utils import secure_filename
 # Import agent package
 from agents.config import set_api_key, is_live_mode, get_api_key
 from agents.coordinator import run_coordination_pipeline
+from agents.tools import tool_registry
+from agents.tools.weather_api import get_weather_advisory
+from agents.tools.json_report import generate_json_report
 
 app = Flask(__name__, static_folder='static', template_folder='templates')
 CORS(app)
@@ -15,7 +18,11 @@ CORS(app)
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+REPORTS_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'reports')
+os.makedirs(REPORTS_FOLDER, exist_ok=True)
+app.config['REPORTS_FOLDER'] = REPORTS_FOLDER
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max upload
+
 
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'webp', 'pdf'}
 
@@ -36,7 +43,6 @@ def handle_config():
         data = request.json or {}
         api_key = data.get('api_key', '').strip()
         set_api_key(api_key)
-        # Optionally write back to a local temporary session/env file if desired
         return jsonify({
             "success": True,
             "is_configured": is_live_mode(),
@@ -47,6 +53,35 @@ def handle_config():
             "is_configured": is_live_mode(),
             "mode": "Live (Gemini API Connected)" if is_live_mode() else "Simulation Mode (Interactive Mock)"
         })
+
+
+@app.route('/api/tools', methods=['GET'])
+def get_tool_manifest():
+    """Returns JSON manifest of all registered enterprise tools."""
+    from agents.tools import tool_registry
+    return jsonify({
+        "tools": tool_registry.get_tool_manifest(),
+        "total_tools": len(tool_registry.get_tool_manifest())
+    })
+
+
+@app.route('/api/weather', methods=['GET'])
+def get_weather():
+    """Direct weather tool query for the dashboard weather widget."""
+    city = request.args.get('city', 'Pune')
+    country_code = request.args.get('country', 'IN')
+    from agents.tools import tool_registry
+    result = tool_registry.invoke("get_weather_advisory", city=city, country_code=country_code)
+    if result.get("status") == "success":
+        return jsonify(result.get("output", {}))
+    else:
+        return jsonify({"error": result.get("error", "Weather tool failed"), "city": city}), 500
+
+
+@app.route('/reports/<filename>')
+def serve_report(filename):
+    """Serves generated JSON report files from the reports/ directory."""
+    return send_from_directory(REPORTS_FOLDER, filename)
 
 @app.route('/api/upload', methods=['POST'])
 def upload_blueprint():
@@ -132,12 +167,36 @@ def create_schematic_blueprint(file_path):
 
     img.save(file_path)
 
+@app.route('/api/export', methods=['POST'])
+def export_report():
+    """Generates a JSON report from the last pipeline result."""
+    data = request.json or {}
+    pipeline_result = data.get('pipeline_result', {})
+    report_title = data.get('report_title', 'BuildSense Analysis Report')
+
+    if not pipeline_result:
+        return jsonify({"error": "No pipeline_result provided"}), 400
+
+    from agents.tools import tool_registry
+    result = tool_registry.invoke(
+        "generate_json_report",
+        pipeline_result=pipeline_result,
+        report_title=report_title
+    )
+    if result.get("status") == "success":
+        return jsonify(result.get("output", {}))
+    else:
+        return jsonify({"error": result.get("error", "Export failed")}), 500
+
+
 @app.route('/api/query', methods=['POST'])
 def process_query():
     data = request.json or {}
     user_query = data.get('query', '').strip()
     image_path = data.get('image_path', '').strip()
     budget_limit_raw = data.get('budget_limit', None)
+    site_city = data.get('site_city', 'Pune').strip()
+    region = data.get('region', 'Pune').strip()
     
     if not user_query:
         return jsonify({"error": "Query cannot be empty"}), 400
@@ -192,7 +251,12 @@ def process_query():
                 
     try:
         # Run orchestration
-        result = run_coordination_pipeline(image_path, user_query, budget_limit=budget_limit)
+        result = run_coordination_pipeline(
+            image_path, user_query,
+            budget_limit=budget_limit,
+            site_city=site_city,
+            region=region
+        )
         
         # Include budget limit in return
         result["budget_limit_parsed"] = budget_limit

@@ -1247,3 +1247,66 @@ body {
         height: 600px;
     }
 }
+
+/* Milestone 2: Tool UI Enhancements */
+.weather-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--border-glass);
+    padding: 6px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 500;
+}
+.weather-risk {
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 700;
+}
+.weather-risk.badge-low { background: rgba(0, 255, 170, 0.2); color: var(--color-green); }
+.weather-risk.badge-medium { background: rgba(255, 170, 0, 0.2); color: var(--color-orange); }
+.weather-risk.badge-high { background: rgba(255, 59, 48, 0.2); color: var(--color-red); }
+
+.btn-export { color: var(--color-green); }
+.btn-export:hover { color: #00ffcc; }
+.chat-actions { display: flex; gap: 12px; }
+
+.node-tool-badge {
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-glass-active);
+    color: var(--color-blue);
+    border-radius: 12px;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: bold;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    z-index: 10;
+}
+
+/* Tool Execution Trace Panel */
+.tool-trace-panel {
+    background: #0f121e;
+    border-top: 1px solid var(--border-glass);
+    padding: 12px;
+    font-family: 'Courier New', Courier, monospace;
+    font-size: 11px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+.tool-trace-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 4px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.02);
+    color: var(--text-secondary);
+}
+.tool-trace-row.success { border-left: 2px solid var(--color-green); padding-left: 6px; }
+.tool-trace-row.error { border-left: 2px solid var(--color-red); padding-left: 6px; color: var(--color-red); }
+.tool-trace-name { color: var(--color-blue); font-weight: bold; }
+.tool-trace-duration { color: var(--text-muted); }

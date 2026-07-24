@@ -39,6 +39,14 @@ print("\n=== SCHEDULING ===")
 print("Total Days:", sched.get('total_duration_days'))
 print("Critical Path:", sched.get('critical_path', [])[:3], "...")
 
+print("\n=== TOOL EXECUTION TRACE ===")
+trace = result.get('tool_execution_trace', [])
+print(f"Total Tools Executed: {len(trace)}")
+for call in trace[:3]:
+    print(f"  - [{call.get('status', '???')}] {call.get('tool', call.get('tool_name', '???'))} ({call.get('duration_ms', 0)}ms)")
+if len(trace) > 3:
+    print(f"  ... and {len(trace) - 3} more")
+
 print("\n=== SYNTHESIS (first 400 chars) ===")
 print(result['synthesized_recommendation'][:400].encode('ascii', 'replace').decode())
 print("\n[TEST PASSED]")

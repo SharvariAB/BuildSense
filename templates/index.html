@@ -27,6 +27,11 @@
             </div>
             
             <div class="header-actions">
+                <div class="weather-strip" id="weatherStrip" style="display: none;">
+                    <span class="weather-icon" id="weatherIcon">☀️</span>
+                    <span class="weather-text" id="weatherText">Loading...</span>
+                    <span class="weather-risk badge-low" id="weatherRisk">LOW</span>
+                </div>
                 <div class="engine-mode-badge" id="engineModeBadge">
                     <span class="status-dot pulsing"></span>
                     <span class="mode-text">Simulation Mode</span>
@@ -110,6 +115,7 @@
                                 <div class="node-icon"><i class="fa-solid fa-crown"></i></div>
                                 <span class="node-name">Coordinator Agent</span>
                                 <span class="node-status">Ready</span>
+                                <div class="node-tool-badge" style="display: none;"><i class="fa-solid fa-gear"></i> <span class="count">0</span></div>
                             </div>
 
                             <!-- Specialist Nodes -->
@@ -118,6 +124,7 @@
                                 <div class="node-icon"><i class="fa-solid fa-eye"></i></div>
                                 <span class="node-name">Blueprint Vision</span>
                                 <span class="node-status">Idle</span>
+                                <div class="node-tool-badge" style="display: none;"><i class="fa-solid fa-gear"></i> <span class="count">0</span></div>
                             </div>
 
                             <div class="agent-node node-specialist" id="node-cost" data-agent="Cost Estimation">
@@ -125,6 +132,7 @@
                                 <div class="node-icon"><i class="fa-solid fa-calculator"></i></div>
                                 <span class="node-name">Cost Estimator</span>
                                 <span class="node-status">Idle</span>
+                                <div class="node-tool-badge" style="display: none;"><i class="fa-solid fa-gear"></i> <span class="count">0</span></div>
                             </div>
 
                             <div class="agent-node node-specialist" id="node-compliance" data-agent="Code Compliance">
@@ -132,6 +140,7 @@
                                 <div class="node-icon"><i class="fa-solid fa-scale-balanced"></i></div>
                                 <span class="node-name">Code Compliance</span>
                                 <span class="node-status">Idle</span>
+                                <div class="node-tool-badge" style="display: none;"><i class="fa-solid fa-gear"></i> <span class="count">0</span></div>
                             </div>
 
                             <div class="agent-node node-specialist" id="node-scheduling" data-agent="Scheduling">
@@ -139,6 +148,7 @@
                                 <div class="node-icon"><i class="fa-solid fa-calendar-days"></i></div>
                                 <span class="node-name">Scheduling Agent</span>
                                 <span class="node-status">Idle</span>
+                                <div class="node-tool-badge" style="display: none;"><i class="fa-solid fa-gear"></i> <span class="count">0</span></div>
                             </div>
 
                             <div class="agent-node node-specialist" id="node-workforce" data-agent="Workforce">
@@ -146,6 +156,7 @@
                                 <div class="node-icon"><i class="fa-solid fa-people-group"></i></div>
                                 <span class="node-name">Workforce Agent</span>
                                 <span class="node-status">Idle</span>
+                                <div class="node-tool-badge" style="display: none;"><i class="fa-solid fa-gear"></i> <span class="count">0</span></div>
                             </div>
                         </div>
                     </div>
@@ -160,9 +171,14 @@
                             <i class="fa-solid fa-comment-dots"></i>
                             <h2>Decision Support & Chat</h2>
                         </div>
-                        <button class="btn btn-link btn-clear" id="clearChatBtn" title="Clear Chat History">
-                            <i class="fa-solid fa-rotate-left"></i> Reset
-                        </button>
+                        <div class="chat-actions">
+                            <button class="btn btn-link btn-export" id="exportReportBtn" title="Export JSON Report" style="display: none;">
+                                <i class="fa-solid fa-file-export"></i> Export
+                            </button>
+                            <button class="btn btn-link btn-clear" id="clearChatBtn" title="Clear Chat History">
+                                <i class="fa-solid fa-rotate-left"></i> Reset
+                            </button>
+                        </div>
                     </div>
                     
                     <!-- Chat Window -->
